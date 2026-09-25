@@ -5262,7 +5262,7 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
         ],
       },
       {
-        // his fan mail: every message is an item, newest first (js/owner.js)
+        // his fan mail: an Inbox that opens the Mail app (js/owner.js)
         id: 'mail', label: 'Mail', icon: 'mail',
         badge: GSP.mail && GSP.mail.unreadCount() ? String(GSP.mail.unreadCount()) : null,
         items: GSP.mail ? GSP.mail.items() : [],
@@ -5604,12 +5604,12 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
   ].map((h) => ({ ...h, at: t0 - h.ago * 60000 }));
   let unseen = 0;
 
-  // the Mail category's column: every message, newest first, the note pinned on top; the sender is
-  // the label (the XMB shows one line), NEW until it has been read
-  const mailItems = () => inbox.slice().sort((a, b) => (!!b.pinned - !!a.pinned) || b.at - a.at).map((m) => ({
-    id: `mail-${m.id}`, label: m.from, icon: 'mail', badge: unread(m) ? 'NEW' : null, subtitle: m.subject,
-    action: () => read(m),
-  }));
+  // the Mail category's column: one Inbox that opens the Mail app; the messages live inside it
+  const mailItems = () => {
+    const n = inbox.filter(unread).length;
+    return [{ id: 'inbox', label: 'Inbox', icon: 'mail', badge: n ? String(n) : null,
+      subtitle: `${n} unread. Every message written by him, to him.`, action: () => Apps.mail() }];
+  };
   GSP.mail = {
     get inbox() { return inbox; },
     unreadCount: () => inbox.filter(unread).length,
@@ -5643,6 +5643,32 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
     const net = GSP.apps.buildCategories().find((c) => c.id === 'network');
     if (net) GSP.xmb.refresh('network', net.items);        // the Notifications badge
   }
+
+  /** the Mail app: the inbox, newest first, the "read this first" note pinned to the top */
+  Apps.mail = function () {
+    const sorted = inbox.slice().sort((a, b) => (!!b.pinned - !!a.pinned) || b.at - a.at);
+    const items = sorted.map((m) => ({
+      t1: (unread(m) ? '● ' : '') + m.subject,
+      t2: m.from,
+      t3: m.pinned ? 'pinned' : ago(m.at),
+      icon: 'mail',
+      m,
+    }));
+    return GSP.ui.list({
+      title: `Mail — ${GSP.mail.unreadCount()} unread`,
+      icon: 'mail',
+      items,
+      hints: [['cross', 'Read'], ['circle', 'Back']],
+      onPick: async (it) => {
+        const was = it.t1;
+        await read(it.m);
+        // back in the inbox: that message is read now, and the count in the title follows
+        it.t1 = it.m.subject;
+        for (const n of document.querySelectorAll('.sheet .li .t1')) if (n.textContent === was) n.textContent = it.t1;
+        for (const n of document.querySelectorAll('.sheet .band span')) if (n.textContent.startsWith('Mail — ')) n.textContent = `Mail — ${GSP.mail.unreadCount()} unread`;
+      },
+    });
+  };
 
   /** the Notification Centre: every notice so far, newest first. Mail opens; the rest open in full */
   Apps.notifications = function () {
