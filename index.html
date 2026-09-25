@@ -623,6 +623,14 @@ body.show-resume .resume-print {
 }
 .xmb .cat .cat-icon { width: 48px; height: 48px; transition: transform 190ms var(--ease-xmb); transform: scale(.66); }
 .xmb .cat.on .cat-icon { transform: scale(1); }
+.xmb .cat .cat-icon { position: relative; }
+.xmb .cat-badge {
+  position: absolute; top: -3px; right: -9px;
+  min-width: 17px; padding: 0 5px;
+  font: 600 10.5px/16px var(--xmb-font); text-align: center; letter-spacing: 0;
+  color: #1a0f2c; background: #fff; border-radius: 9px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.35), 0 1px 3px rgba(0,0,0,.45);
+}
 .xmb .cat-label {
   position: absolute; left: 50%; top: 46px;
   transform: translateX(-50%);
@@ -4092,7 +4100,7 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
 
   function buildCat(cat, k) {
     const node = el('div.cat', { role: 'menuitem', 'aria-label': cat.label });
-    node.innerHTML = `<div class="cat-icon">${GSP.icon(cat.icon)}</div><div class="cat-label">${GSP.esc(cat.label)}</div>`;
+    node.innerHTML = `<div class="cat-icon">${GSP.icon(cat.icon)}${cat.badge ? `<span class="cat-badge">${GSP.esc(cat.badge)}</span>` : ''}</div><div class="cat-label">${GSP.esc(cat.label)}</div>`;
     const col = el('div.col');
     node.append(col);
     node.querySelector('.cat-icon').addEventListener('click', (e) => {
@@ -4137,6 +4145,18 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
   }
 
   /** replace one category's items (Saved Data after a new high score, etc.) */
+  /** set or clear the badge on a category's icon (Mail's unread count) */
+  X.badge = function (catId, text) {
+    const cat = X.cats.find((c) => c.id === catId);
+    if (!cat || !cat.el) return;
+    cat.badge = text;
+    const icon = cat.el.querySelector('.cat-icon');
+    let b = icon.querySelector('.cat-badge');
+    if (!text) { b && b.remove(); return; }
+    if (!b) { b = el('span.cat-badge'); icon.append(b); }
+    b.textContent = text;
+  };
+
   X.refresh = function (catId, items) {
     const cat = X.cats.find((c) => c.id === catId);
     if (!cat) return;
@@ -5242,9 +5262,14 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
         ],
       },
       {
+        // his fan mail: every message is an item, newest first (js/owner.js)
+        id: 'mail', label: 'Mail', icon: 'mail',
+        badge: GSP.mail && GSP.mail.unreadCount() ? String(GSP.mail.unreadCount()) : null,
+        items: GSP.mail ? GSP.mail.items() : [],
+      },
+      {
         id: 'network', label: 'Network', icon: 'network',
         items: [
-          { id: 'mail', label: 'Mail', icon: 'mail', badge: GSP.mail && GSP.mail.unreadCount() ? String(GSP.mail.unreadCount()) : null, subtitle: 'Fan mail. All of it self-addressed.', action: () => Apps.mail && Apps.mail() },
           { id: 'notices', label: 'Notifications', icon: 'bell', badge: GSP.notices && GSP.notices.unseen() ? String(GSP.notices.unseen()) : null, subtitle: 'Everything that popped up, kept here', action: () => Apps.notifications && Apps.notifications() },
           { id: 'browser', label: 'Internet Browser', icon: 'browser', subtitle: 'GitHub, LinkedIn and the huh? site', action: () => Apps.bookmarks() },
           { id: 'rss', label: 'RSS Channel', icon: 'rss', subtitle: 'Recent commits across the projects', action: () => Apps.rss() },
@@ -5579,9 +5604,16 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
   ].map((h) => ({ ...h, at: t0 - h.ago * 60000 }));
   let unseen = 0;
 
+  // the Mail category's column: every message, newest first, the note pinned on top; the sender is
+  // the label (the XMB shows one line), NEW until it has been read
+  const mailItems = () => inbox.slice().sort((a, b) => (!!b.pinned - !!a.pinned) || b.at - a.at).map((m) => ({
+    id: `mail-${m.id}`, label: m.from, icon: 'mail', badge: unread(m) ? 'NEW' : null, subtitle: m.subject,
+    action: () => read(m),
+  }));
   GSP.mail = {
     get inbox() { return inbox; },
     unreadCount: () => inbox.filter(unread).length,
+    items: mailItems,
   };
   GSP.notices = { unseen: () => unseen };
 
@@ -5604,8 +5636,12 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
   };
 
   function refreshBadge() {
-    const cat = GSP.apps.buildCategories().find((c) => c.id === 'network');
-    if (cat && GSP.xmb && GSP.xmb.cats) GSP.xmb.refresh('network', cat.items);
+    if (!GSP.xmb || !GSP.xmb.cats || !GSP.xmb.cats.length) return;
+    GSP.xmb.refresh('mail', mailItems());
+    const n = GSP.mail.unreadCount();
+    GSP.xmb.badge('mail', n ? String(n) : null);
+    const net = GSP.apps.buildCategories().find((c) => c.id === 'network');
+    if (net) GSP.xmb.refresh('network', net.items);        // the Notifications badge
   }
 
   /** the Notification Centre: every notice so far, newest first. Mail opens; the rest open in full */
@@ -5620,25 +5656,6 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
       empty: 'Nothing yet. Give it a minute: it is all about him.',
       hints: [['cross', 'Open'], ['circle', 'Back']],
       onPick: (it) => (it.h.m ? read(it.h.m) : GSP.ui.dialog({ message: it.h.title, sub: it.h.text })),
-    });
-  };
-
-  /** the inbox: newest first, the "read this first" note pinned to the top */
-  Apps.mail = function () {
-    const sorted = inbox.slice().sort((a, b) => (!!b.pinned - !!a.pinned) || b.at - a.at);
-    const items = sorted.map((m) => ({
-      t1: (unread(m) ? '● ' : '') + m.subject,
-      t2: m.from,
-      t3: m.pinned ? 'pinned' : ago(m.at),
-      icon: 'mail',
-      m,
-    }));
-    return GSP.ui.list({
-      title: `Mail — ${GSP.mail.unreadCount()} unread`,
-      icon: 'mail',
-      items,
-      hints: [['cross', 'Read'], ['circle', 'Back']],
-      onPick: (it) => read(it.m),
     });
   };
 
@@ -24953,6 +24970,8 @@ const OVERHEAD_DATA = {"obl":23.43928,"dt":{"jd0":2378496.5,"step":365.2425,"v":
   function linkedItem() {
     const id = decodeURIComponent((location.hash || '').slice(1));
     if (!id) return null;
+    const mail = GSP.xmb.cats.find((c) => c.id === 'mail');
+    if (id === 'mail' && mail && mail.items[0]) return ['mail', mail.items[0].id];
     for (const c of GSP.xmb.cats) if (c.items.some((it) => it.id === id)) return [c.id, id];
     return null;
   }
@@ -24973,7 +24992,7 @@ const OVERHEAD_DATA = {"obl":23.43928,"dt":{"jd0":2378496.5,"step":365.2425,"v":
         const k = await GSP.ui.dialog({
           message: `Welcome to Geetansh’s GSP, ${u.name}.`,
           sub: 'He left it on for you. Everything he has built is in Game, one disc each, and the first disc is about him. ' +
-            (n ? `He also has ${n} unread messages in Network ▸ Mail. Don’t read them. (Read them.) ` : '') +
+            (n ? `He also has ${n} unread messages in Mail. Don’t read them. (Read them.) ` : '') +
             (GSP.coarse ? 'Swipe to move, tap to open, ○ goes back.' : 'Arrow keys move, Enter selects, Esc goes back, T opens options.'),
           options: ['About Geetansh', 'Look around'],
           cancel: 1,
