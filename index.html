@@ -786,7 +786,7 @@ body.show-resume .resume-print {
 
 /* ---------- dialog / message box ------------------------------------------- */
 .dlg {
-  position: absolute; inset: 0;
+  position: absolute; inset: 0; z-index: 8;      /* over sheets (5), panels (6) and the keyboard (7) */
   display: grid; place-items: center;
   background: rgba(0, 0, 0, .42);
   color: #fff; text-shadow: var(--shadow-text);
@@ -1174,7 +1174,7 @@ body.show-resume .resume-print {
 }
 
 /* a sheet opened over another hides the one beneath; the sign-in steps back behind its dialogs */
-.sheet.show.under { opacity: 0; }
+.sheet.show.under { opacity: 0; pointer-events: none; }   /* faded out under something: it must not take clicks */
 .signin .si-row, .signin .si-desc, .signin .si-title { transition: opacity 200ms ease; }
 .signin.dim .si-row, .signin.dim .si-desc, .signin.dim .si-title { opacity: .07; }
 .signin .hintbar { transition: opacity 200ms ease; }
@@ -1640,9 +1640,8 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
         end: 'Present',
         summary: 'Keeps a fleet of stores, devices and accounts running — and secure — and builds the tooling that makes that work checkable.',
         points: [
-          'Triages security alerts every day across Google Workspace, Cisco Meraki, NinjaOne, Microsoft Intune and Cisco Secure Endpoint — drops the known false positives, audits the real flags end to end.',
+          'Triages security alerts every day across Google Workspace, Cisco Meraki, Microsoft Intune and Cisco Secure Endpoint — drops the known false positives, audits the real flags end to end.',
           'Built three MCP servers (364 tools) so an AI assistant can administer the service desk, the endpoint fleet and the phone system, with every write held for a human to approve.',
-          'Moving the service desk from NinjaOne ticketing to Jira Service Management: an organization per site, bulk customer provisioning, workflows, fields and automation.',
           'Handles escalations across endpoints, networks and identity, and records every change and incident where the next person can find it.',
         ],
       },
@@ -1663,7 +1662,7 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
       { group: 'Networks & security', items: ['tcpdump / pktap', 'PCAP-NG', 'mitmproxy', 'pf', 'TLS', 'DNS', 'QUIC', 'EDR concepts', 'Meraki', 'Intune', 'Secure Endpoint'] },
       { group: 'Audio & DSP', items: ['loudness (LUFS, true peak)', 'beat + key estimation', 'source separation', 'numpy', 'librosa'] },
       { group: 'Security operations', items: ['alert triage', 'written false-positive rules', 'evidence chains', 'sign-in log forensics', 'EDR triage', 'read-only audits'] },
-      { group: 'IT operations', items: ['NinjaOne RMM', 'Jira Service Management', 'Confluence', 'RingCentral', 'Google Workspace', 'ClickUp'] },
+      { group: 'IT operations', items: ['Confluence', 'RingCentral', 'Google Workspace', 'ClickUp'] },
       { group: 'AI tooling', items: ['MCP servers', 'approval-gated agents', 'prompt-injection hygiene', 'scheduled agents', 'tool design'] },
       { group: 'Automation', items: ['AppleScript / osascript', 'Safari do JavaScript', 'DOM event scripting', 'Python + Bash glue'] },
       { group: 'Design', items: ['two written design languages', 'design tokens (CSS + SwiftUI)', 'motion', 'pixel-art pipelines'] },
@@ -4003,10 +4002,13 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
         setTimeout(() => node.remove(), 220);
         resolve(v);
       };
+      // one thing open at a time: a second click while the first pick is still open does nothing
+      let picking = false;
       const pick = async () => {
-        if (!items[i] || !onPick) return;
+        if (!items[i] || !onPick || picking) return;
+        picking = true;
         GSP.audio.play('enter');
-        await onPick(items[i], i);
+        try { await onPick(items[i], i); } finally { picking = false; }
       };
       const pop = GSP.input.push({
         ...menuKeys(() => i, (v) => { i = v; draw(); }, () => items.length, {
@@ -6386,13 +6388,13 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
   const TOKENS = {
     // terms — spelled right; the recogniser just doesn't know them yet
     Kubernetes: { kind: 'term' }, Suricata: { kind: 'term' }, Proxmox: { kind: 'term' }, mitmproxy: { kind: 'term' },
-    pktap: { kind: 'term' }, SwiftData: { kind: 'term' }, Meraki: { kind: 'term' }, NinjaOne: { kind: 'term' },
+    pktap: { kind: 'term' }, SwiftData: { kind: 'term' }, Meraki: { kind: 'term' }, Tailscale: { kind: 'term' },
     eslogger: { kind: 'term' }, 'PCAP-NG': { kind: 'term' },
     // mis-hearings — spelled wrong; a correction rule fixes them afterwards
     'cuber netties': { kind: 'mis', fix: 'Kubernetes' }, versel: { kind: 'mis', fix: 'Vercel' },
     'sis prep': { kind: 'mis', fix: 'sysprep' }, 'jay son': { kind: 'mis', fix: 'JSON' },
     'mack oh s': { kind: 'mis', fix: 'macOS' }, 'pee kay tap': { kind: 'mis', fix: 'pktap' },
-    'sequel light': { kind: 'mis', fix: 'SQLite' }, 'ninja won': { kind: 'mis', fix: 'NinjaOne' },
+    'sequel light': { kind: 'mis', fix: 'SQLite' }, 'tail scale': { kind: 'mis', fix: 'Tailscale' },
     'get dance': { kind: 'mis', fix: 'Geetansh' },
     // people — a name settles once, in its own store
     Ada: { kind: 'person' }, Grace: { kind: 'person' }, Linus: { kind: 'person' }, Margaret: { kind: 'person' },
@@ -6433,8 +6435,8 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
     ['chat', '{Grace}, is the {Proxmox} cluster back up?'],
     ['chat', '{eslogger} caught the helper spawning a shell'],
     ['chat', 'can someone roll back the {versel} preview?'],
-    ['chat', '{Alan} pushed the {NinjaOne} script to the test group'],
-    ['chat', '{Alan} pushed the {ninja won} script to the test group'],
+    ['chat', '{Alan} pushed the {Tailscale} config to the test group'],
+    ['chat', '{Alan} pushed the {tail scale} config to the test group'],
     ['chat', '{Hedy}, can you look at the {cuber netties} alerts?'],
     ['term', 'export the settings as {jay son} instead of a plist'],
     ['term', 'store the ledger in {sequel light}, not a flat file'],
@@ -6447,8 +6449,8 @@ window.GSP = window.GSP || {}; GSP.assetMap = {"assets/sprites/alarm_off.webp":"
     ['ticket', 'the {Meraki} switch in the back office keeps dropping'],
     ['ticket', 'update {mack oh s} on the design laptops tonight'],
     ['ticket', '{eslogger} shows which process opened the socket'],
-    ['ticket', 'move the old tickets out of {NinjaOne} by friday'],
-    ['ticket', 'move the old tickets out of {ninja won} by friday'],
+    ['ticket', 'add the loaner laptop to {Tailscale} by friday'],
+    ['ticket', 'add the loaner laptop to {tail scale} by friday'],
     ['ticket', 'the {SwiftData} store fails to migrate on launch'],
     ['ticket', '{eslogger} and {pktap} agree on the process'],
     ['ticket', 'reimage it with {sis prep} and ask {Grace} to test'],
