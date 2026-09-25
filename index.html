@@ -85,7 +85,10 @@
 :root[data-theme="dark"] { color-scheme: dark; }
 
 *, *::before, *::after { box-sizing: border-box; }
-html, body { height: 100%; }
+html, body { height: 100%; overscroll-behavior: none; }
+/* phones: keep text at the size it was set (iOS enlarges it on rotation otherwise), and no
+   double-tap zoom — the handheld is tapped a lot. Pinch zoom stays. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
 body {
   margin: 0;
   background: var(--ground);
@@ -201,21 +204,35 @@ main.stage {
   .brand-name { font-size: 9px; letter-spacing: .22em; }
 }
 
-/* ---------- short landscape screens (phones on their side): the handheld is the page */
+/* ---------- short landscape screens (phones on their side): the handheld is the page ----------
+   It clears the notch / Dynamic Island and the home bar, and fits the height with the shoulders
+   (3.4% above the box) and the lower edge (2.5% below) inside it. */
 @media (orientation: landscape) and (max-height: 540px) {
-  main.stage { padding: 0 10px; }
-  main.stage > .device { --dev-w: min(1500px, calc(100vw - 20px), calc((100dvh - 58px) * 2.3725)); margin-top: 14px; }
+  main.stage {
+    overflow: hidden;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  main.stage > .device {
+    --dev-w: min(1500px,
+      calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)),
+      calc((100dvh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 2.3725));
+  }
   .brand, .site-foot { display: none; }
 }
 
 /* ---------- phone held upright: turn the handheld on its side -------------- */
+/* Its long side runs down the screen between the mark (about 44px) and the small print (about
+   64px), inside the notch and home-bar insets, and it stays inside the screen's width. */
 @media (orientation: portrait) and (max-width: 900px) {
-  main.stage { padding: 0; }
+  main.stage { padding: 0; overflow: hidden; }
   main.stage > .device {
-    --dev-w: min(calc(100dvh - 150px), calc((100vw - 32px) * 2.3725), 1100px);
+    --dev-w: min(
+      calc(100dvh - 112px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)),
+      calc((100vw - 32px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) * 2.3725),
+      1100px);
     position: absolute;
     left: 50%;
-    top: calc(50% + 6px);            /* a one-line mark above, the small print below */
+    top: calc(50% - 10px + (env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) / 2);
     transform: translate(-50%, -50%) rotate(90deg);
   }
 }
@@ -223,6 +240,7 @@ main.stage {
 /* ---------- the text version (screen readers, the footer's Text version, and print) ---- */
 .resume-print {
   position: absolute;
+  top: 0; left: 0;              /* hidden for screen readers, inside the page — not 1px past its end */
   width: 1px; height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
